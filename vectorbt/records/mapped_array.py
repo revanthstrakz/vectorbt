@@ -355,6 +355,7 @@ Name: first, dtype: object
 """
 
 import numpy as np
+import packaging.version
 import pandas as pd
 
 from vectorbt import _typing as tp
@@ -783,7 +784,7 @@ class MappedArray(Wrapping, StatsBuilderMixin, PlotsBuilderMixin, metaclass=Meta
             name_or_index='reduce' if not returns_array else None,
             to_index=returns_idx and to_index,
             fillna=-1 if returns_idx else None,
-            dtype=np.int_ if returns_idx else None
+            dtype=np.int64 if returns_idx else None
         ), wrap_kwargs)
         return self.wrapper.wrap_reduced(out, group_by=group_by, **wrap_kwargs)
 
@@ -988,6 +989,8 @@ class MappedArray(Wrapping, StatsBuilderMixin, PlotsBuilderMixin, metaclass=Meta
 
         !!! note
             Does not take into account missing values."""
+        from pkg_resources import parse_version
+
         if mapping is None:
             mapping = self.mapping
         if isinstance(mapping, str):
@@ -996,7 +999,10 @@ class MappedArray(Wrapping, StatsBuilderMixin, PlotsBuilderMixin, metaclass=Meta
             elif mapping.lower() == 'columns':
                 mapping = self.wrapper.columns
             mapping = to_mapping(mapping)
-        mapped_codes, mapped_uniques = pd.factorize(self.values, sort=False, use_na_sentinel=False)
+        if parse_version(pd.__version__) < parse_version("1.5.0"):
+            mapped_codes, mapped_uniques = pd.factorize(self.values, sort=False, na_sentinel=None)
+        else:
+            mapped_codes, mapped_uniques = pd.factorize(self.values, sort=False, use_na_sentinel=False)
         col_map = self.col_mapper.get_col_map(group_by=group_by)
         value_counts = nb.mapped_value_counts_nb(mapped_codes, len(mapped_uniques), col_map)
         if incl_all_keys and mapping is not None:

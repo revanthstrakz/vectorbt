@@ -773,7 +773,7 @@ class GenericAccessor(BaseAccessor, StatsBuilderMixin, PlotsBuilderMixin, metacl
             name_or_index='reduce' if not returns_array else None,
             to_index=returns_idx and to_index,
             fillna=-1 if returns_idx else None,
-            dtype=np.int_ if returns_idx else None
+            dtype=np.int64 if returns_idx else None
         ), wrap_kwargs)
         return self.wrapper.wrap_reduced(out, group_by=group_by, **wrap_kwargs)
 
@@ -865,7 +865,7 @@ class GenericAccessor(BaseAccessor, StatsBuilderMixin, PlotsBuilderMixin, metacl
 
     def count(self, group_by: tp.GroupByLike = None, wrap_kwargs: tp.KwargsLike = None) -> tp.MaybeSeries:
         """Return count of non-NaN elements."""
-        wrap_kwargs = merge_dicts(dict(name_or_index='count', dtype=np.int_), wrap_kwargs)
+        wrap_kwargs = merge_dicts(dict(name_or_index='count', dtype=np.int64), wrap_kwargs)
         if self.wrapper.grouper.is_grouped(group_by=group_by):
             return self.reduce(nb.count_reduce_nb, group_by=group_by, flatten=True, wrap_kwargs=wrap_kwargs)
 
@@ -972,6 +972,8 @@ class GenericAccessor(BaseAccessor, StatsBuilderMixin, PlotsBuilderMixin, metacl
         * Enable `incl_all_keys` to include all mapping keys, no only those that are present in the array.
 
         Mapping will be applied using `vectorbt.utils.mapping.apply_mapping` with `**kwargs`."""
+        from pkg_resources import parse_version
+
         if mapping is None:
             mapping = self.mapping
         if isinstance(mapping, str):
@@ -980,7 +982,10 @@ class GenericAccessor(BaseAccessor, StatsBuilderMixin, PlotsBuilderMixin, metacl
             elif mapping.lower() == 'columns':
                 mapping = self.wrapper.columns
             mapping = to_mapping(mapping)
-        codes, uniques = pd.factorize(self.obj.values.flatten(), sort=False, use_na_sentinel=False)
+        if parse_version(pd.__version__) < parse_version("1.5.0"):
+            codes, uniques = pd.factorize(self.obj.values.flatten(), sort=False, na_sentinel=None)
+        else:
+            codes, uniques = pd.factorize(self.obj.values.flatten(), sort=False, use_na_sentinel=False)
         codes = codes.reshape(self.wrapper.shape_2d)
         group_lens = self.wrapper.grouper.get_group_lens(group_by=group_by)
         value_counts = nb.value_counts_nb(codes, len(uniques), group_lens)
